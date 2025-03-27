@@ -8,15 +8,13 @@ export const UserProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // בדיקה אם יש משתמש שמור בלוקל סטורג' ושחזור המצב
         const storedUser = localStorage.getItem('currentUser');
         if (storedUser) {
             try {
                 setCurrentUser(JSON.parse(storedUser));
             } catch (error) {
-                // במקרה שיש בעיה עם ה-JSON בלוקל סטורג'
                 console.error('שגיאה בטעינת משתמש מהאחסון המקומי:', error);
-                localStorage.removeItem('currentUser'); // מוחק את המידע הפגום
+                localStorage.removeItem('currentUser');
             }
         }
         setLoading(false);
@@ -26,7 +24,6 @@ export const UserProvider = ({ children }) => {
         try {
             const res = await axios.get(`http://localhost:5000/api/users/${phone}`);
             setCurrentUser(res.data);
-            // שמירה בלוקל סטורג' ללא תאריך תפוגה
             localStorage.setItem('currentUser', JSON.stringify(res.data));
             return true;
         } catch (err) {
@@ -39,7 +36,6 @@ export const UserProvider = ({ children }) => {
         try {
             const res = await axios.post('http://localhost:5000/api/users', userData);
             setCurrentUser(res.data);
-            // שמירה בלוקל סטורג' ללא תאריך תפוגה
             localStorage.setItem('currentUser', JSON.stringify(res.data));
             return true;
         } catch (err) {
@@ -49,13 +45,10 @@ export const UserProvider = ({ children }) => {
     };
 
     const logoutUser = () => {
-        // מחיקת המידע מהלוקל סטורג'
         localStorage.removeItem('currentUser');
-        // איפוס הסטייט
         setCurrentUser(null);
     };
 
-    // פונקציה לעדכון המשתמש הנוכחי (שימושי אם יש שינויים בנתוני המשתמש)
     const updateCurrentUser = (userData) => {
         setCurrentUser(userData);
         localStorage.setItem('currentUser', JSON.stringify(userData));

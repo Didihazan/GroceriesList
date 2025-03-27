@@ -61,7 +61,6 @@ export const GroceryProvider = ({ children }) => {
             console.log(`מנסה למחוק פריט עם ID: ${id}`);
             await axios.delete(`http://localhost:5000/api/groceries/${id}`);
 
-            // עדכון ה-state באופן מיידי לאחר מחיקה מוצלחת
             setGroceryItems(prevItems => prevItems.filter(item => item._id !== id));
 
             console.log(`פריט ${id} נמחק בהצלחה`);
@@ -72,7 +71,6 @@ export const GroceryProvider = ({ children }) => {
         }
     };
 
-    // לצורך פיתוח ראשוני - פונקציה המדמה נתונים מהווטסאפ
     const mockWhatsAppData = () => {
         const mockItems = [
             "חלב",

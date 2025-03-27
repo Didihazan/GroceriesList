@@ -98,5 +98,4 @@ const LoginRegisterForm = () => {
         </div>
     );
 };
-
 export default LoginRegisterForm;

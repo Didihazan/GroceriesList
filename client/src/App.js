@@ -6,12 +6,8 @@ import Navbar from './components/Navbar';
 import GroceryListContent from "./pages/GroceryListContent ";
 import LoginRegisterForm from "./pages/LoginRegisterForm";
 
-
-// קומפוננטה ראשית שמתאימה עצמה למצב המשתמש
 const MainContent = () => {
     const { currentUser } = useContext(UserContext);
-
-    // מציג את רשימת הקניות למשתמש מחובר או טופס התחברות למי שלא מחובר
     return (
         <div className="container mx-auto px-4 py-4 md:py-6">
             {currentUser ? (

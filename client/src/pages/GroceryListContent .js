@@ -13,7 +13,6 @@ const GroceryListContent = () => {
         deleteItem,
         mockWhatsAppData
     } = useContext(GroceryContext);
-
     const [newItem, setNewItem] = useState('');
 
     const handleSubmit = async (e) => {
@@ -24,7 +23,6 @@ const GroceryListContent = () => {
         }
     };
 
-    // עדכון פונקציית המחיקה בקומפוננטה
     const handleDeleteItem = async (id) => {
         try {
             console.log(`לחיצה על מחיקת פריט: ${id}`);
@@ -32,7 +30,6 @@ const GroceryListContent = () => {
 
             if (!success) {
                 console.error(`בעיה במחיקת פריט ${id}`);
-                // אפשר להוסיף כאן הודעת שגיאה למשתמש
             }
         } catch (error) {
             console.error('שגיאה בטיפול במחיקת פריט:', error);

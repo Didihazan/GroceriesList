@@ -3,7 +3,6 @@ const router = express.Router();
 const GroceryItem = require('../models/GroceryItem');
 const User = require('../models/User');
 
-// Get all grocery items for a specific user
 router.get('/user/:userId', async (req, res) => {
     try {
         const items = await GroceryItem.find({ user: req.params.userId }).sort({ createdAt: -1 });
