@@ -1,0 +1,7 @@
+build
+.env
+client/node_modules
+../.idea
+.idea
+node_modules/
+server/node_modules
