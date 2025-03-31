@@ -5,3 +5,12 @@ client/node_modules
 .idea
 node_modules/
 server/node_modules
+# WhatsApp Web.js auth files
+server/.wwebjs_auth/
+server/.wwebjs_auth
+**/session-grocery-list-app/
+*_auth/
+*.dat
+server/data
+server/.wwebjs_cache
+server/qr-code.png
