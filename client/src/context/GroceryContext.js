@@ -38,6 +38,7 @@ export const GroceryProvider = ({ children }) => {
             setGroceryItems([res.data, ...groceryItems]);
             return true;
         } catch (err) {
+            console.error('Error adding grocery item:', err);
             return false;
         }
     };
@@ -58,12 +59,8 @@ export const GroceryProvider = ({ children }) => {
 
     const deleteItem = async (id) => {
         try {
-            console.log(`מנסה למחוק פריט עם ID: ${id}`);
             await axios.delete(`http://localhost:5000/api/groceries/${id}`);
-
             setGroceryItems(prevItems => prevItems.filter(item => item._id !== id));
-
-            console.log(`פריט ${id} נמחק בהצלחה`);
             return true;
         } catch (err) {
             console.error('שגיאה במחיקת פריט:', err);
@@ -72,18 +69,8 @@ export const GroceryProvider = ({ children }) => {
     };
 
     const mockWhatsAppData = () => {
-        const mockItems = [
-            "חלב",
-            "לחם",
-            "ביצים",
-            "גבינה צהובה",
-            "עגבניות",
-            "מלפפונים"
-        ];
-
-        return Promise.all(
-            mockItems.map(text => addGroceryItem(text))
-        );
+        const mockItems = ["חלב", "לחם", "ביצים", "גבינה צהובה", "עגבניות", "מלפפונים"];
+        return Promise.all(mockItems.map(text => addGroceryItem(text)));
     };
 
     return (

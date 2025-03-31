@@ -14,7 +14,11 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "mongoose": "^8.13.1"
+    "mongoose": "^8.13.1",
+    "puppeteer": "^24.4.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1",
+    "whatsapp-web.js": "^1.27.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
