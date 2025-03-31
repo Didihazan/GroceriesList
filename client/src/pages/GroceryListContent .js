@@ -52,6 +52,11 @@ const GroceryListContent = () => {
                         setSelectedGroup(res.data.selectedGroup);
                         getGroupDetails(res.data.selectedGroup);
                     }
+
+                    // הוסף עדכון מצב האזנה
+                    if (res.data.listeningEnabled !== undefined) {
+                        setListeningEnabled(res.data.listeningEnabled);
+                    }
                 }
             } catch (err) {
                 console.error('Error checking WhatsApp status:', err);
@@ -106,8 +111,19 @@ const GroceryListContent = () => {
         // כאשר הודעת WhatsApp מעובדת
         socket.on('whatsapp_message_processed', (data) => {
             if (data.success) {
-                setStatusMessage(`פריט חדש נוסף מ-WhatsApp: "${data.messageText}"`);
+                fetchGroceryItems();
+                if (data.itemCount) {
+                    setStatusMessage(`נוספו ${data.itemCount} פריטים מ-WhatsApp`);
+                } else {
+                    setStatusMessage(`פריט חדש נוסף מ-WhatsApp: "${data.messageText}"`);
+                }
             }
+        });
+
+        // האזנה לעדכון מצב האזנה
+        socket.on('whatsapp_listening_status', (data) => {
+            setListeningEnabled(data.enabled);
+            setStatusMessage(data.message);
         });
 
         // טיפול בשגיאות חיבור
@@ -115,18 +131,14 @@ const GroceryListContent = () => {
             setError('שגיאה בחיבור לשרת. נסה להתחבר מחדש.');
         });
 
-        socket.on('whatsapp_listening_status', (data) => {
-            setListeningEnabled(data.enabled);
-            setStatusMessage(data.message);
-        });
         return () => {
             socket.off('whatsapp_qr');
             socket.off('whatsapp_status');
             socket.off('whatsapp_groups');
             socket.off('newGroceryItemAdded');
             socket.off('whatsapp_message_processed');
-            socket.off('connect_error');
             socket.off('whatsapp_listening_status');
+            socket.off('connect_error');
         };
     }, [socket, currentUser, fetchGroceryItems]);
 
@@ -138,26 +150,7 @@ const GroceryListContent = () => {
             setNewItem('');
         }
     };
-    const toggleListening = async () => {
-        try {
-            setError('');
-            setProcessing(true);
 
-            const res = await axios.post('http://localhost:5000/api/whatsapp/toggle-listening', {
-                userId: currentUser._id,
-                enabled: !listeningEnabled
-            });
-
-            if (res.data.success) {
-                setListeningEnabled(res.data.enabled);
-                setStatusMessage(res.data.message);
-            }
-        } catch (err) {
-            setError('שגיאה בשינוי מצב האזנה: ' + (err.response?.data?.message || err.message));
-        } finally {
-            setProcessing(false);
-        }
-    };
     const handleDeleteItem = async (id) => {
         await deleteItem(id);
     };
@@ -249,6 +242,28 @@ const GroceryListContent = () => {
             }
         } catch (err) {
             setError('שגיאה בשליחת הודעת בדיקה: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    // פונקציה לשינוי מצב האזנה
+    const toggleListening = async () => {
+        try {
+            setError('');
+            setProcessing(true);
+
+            const res = await axios.post('http://localhost:5000/api/whatsapp/toggle-listening', {
+                userId: currentUser._id,
+                enabled: !listeningEnabled
+            });
+
+            if (res.data.success) {
+                setListeningEnabled(res.data.enabled);
+                setStatusMessage(res.data.message);
+            }
+        } catch (err) {
+            setError('שגיאה בשינוי מצב האזנה: ' + (err.response?.data?.message || err.message));
         } finally {
             setProcessing(false);
         }
@@ -366,13 +381,13 @@ const GroceryListContent = () => {
 
                                     {/* מתג למצב האזנה */}
                                     <div className="flex items-center justify-between mt-2 border-t pt-2 border-green-200">
-            <span className="text-sm">
-                {listeningEnabled ? (
-                    <span className="text-green-700">מצב האזנה: פעיל</span>
-                ) : (
-                    <span className="text-red-600">מצב האזנה: מושבת</span>
-                )}
-            </span>
+                                        <span className="text-sm">
+                                            {listeningEnabled ? (
+                                                <span className="text-green-700">מצב האזנה: פעיל</span>
+                                            ) : (
+                                                <span className="text-red-600">מצב האזנה: מושבת</span>
+                                            )}
+                                        </span>
 
                                         <button
                                             onClick={toggleListening}
@@ -469,8 +484,8 @@ const GroceryListContent = () => {
                                         {item.completed && <Check size={16} className="text-white"/>}
                                     </button>
                                     <span className={`mr-3 ${item.completed ? 'line-through text-gray-500' : ''}`}>
-        {item.text}
-      </span>
+                                        {item.text}
+                                    </span>
                                 </div>
                                 <button
                                     onClick={() => handleDeleteItem(item._id)}
@@ -483,7 +498,6 @@ const GroceryListContent = () => {
                     </ul>
                 )}
             </div>
-
         </div>
     );
 };

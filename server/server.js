@@ -18,12 +18,46 @@ app.use(cors());
 app.use(express.json());
 
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('MongoDB Connected'))
+    .then(async () => {
+        console.log('MongoDB Connected');
+        // אתחל חיבורי WhatsApp קיימים
+        await initializeExistingWhatsAppConnections();
+    })
     .catch(err => console.log(err));
 
 // ניהול משתמשי WhatsApp
 const whatsappClients = {};
 let whatsappConnectionState = {};
+
+// אתחול חיבור WhatsApp בעת עליית השרת
+const initializeExistingWhatsAppConnections = async () => {
+    try {
+        // מצא משתמשים שהיו מחוברים
+        const connectedUsers = await User.find({
+            'whatsappConfig.connected': true
+        });
+
+        console.log(`Found ${connectedUsers.length} previously connected WhatsApp users`);
+
+        // אתחל חיבורים עבור משתמשים אלה
+        for (const user of connectedUsers) {
+            await initializeWhatsAppClient(user._id.toString());
+
+            // אם יש קבוצה נבחרת, שחזר אותה
+            if (user.whatsappConfig.selectedGroup) {
+                whatsappConnectionState[user._id.toString()] = {
+                    status: 'connected',
+                    selectedGroup: user.whatsappConfig.selectedGroup,
+                    selectedGroupName: user.whatsappConfig.selectedGroupName,
+                    groups: [],
+                    listeningEnabled: user.whatsappConfig.listeningEnabled
+                };
+            }
+        }
+    } catch (err) {
+        console.error('Error initializing existing WhatsApp connections:', err);
+    }
+};
 
 // פונקציה ליצירת ושמירת פריט מכולת חדש
 const createAndSaveGroceryItem = async (userId, text) => {
@@ -85,9 +119,8 @@ const initializeWhatsAppClient = async (userId) => {
             headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         },
-        selfNotifyOptions: {
-            selfNotifyOnMessage: true
-        }
+        // הוסף אפשרות לקבלת הודעות עצמיות:
+        selfNotifyOnMessage: true
     });
 
     // הגדרת סטטוס התחלתי
@@ -95,7 +128,7 @@ const initializeWhatsAppClient = async (userId) => {
         status: 'initializing',
         selectedGroup: null,
         groups: [],
-        listeningEnabled: true
+        listeningEnabled: true  // דגל חדש - כברירת מחדל פעיל
     };
 
     // אירועי לקוח
@@ -109,6 +142,11 @@ const initializeWhatsAppClient = async (userId) => {
         console.log(`WhatsApp client ready for user ${userId}`);
         whatsappConnectionState[userId].status = 'connected';
         io.to(userId).emit('whatsapp_status', { status: 'connected' });
+
+        // עדכן את פרטי המשתמש בבסיס הנתונים
+        await User.findByIdAndUpdate(userId, {
+            'whatsappConfig.connected': true
+        });
 
         // קבל רשימת קבוצות מעודכנת
         try {
@@ -127,7 +165,6 @@ const initializeWhatsAppClient = async (userId) => {
         }
     });
 
-    // בטיפול באירוע message
     client.on('message', async (msg) => {
         console.log(`Message received for user ${userId}:`, msg.body);
         console.log('Chat ID:', msg.from);
@@ -157,7 +194,6 @@ const initializeWhatsAppClient = async (userId) => {
         }
     });
 
-// בטיפול באירוע message_create
     client.on('message_create', async (msg) => {
         if (msg.fromMe) {
             console.log(`Self message created for user ${userId}:`, msg.body);
@@ -170,6 +206,7 @@ const initializeWhatsAppClient = async (userId) => {
                 console.log('Listening disabled, ignoring self message');
                 return;
             }
+
             // בדוק את שני השדות האפשריים
             if (whatsappConnectionState[userId]?.selectedGroup === msg.from ||
                 whatsappConnectionState[userId]?.selectedGroup === msg.to) {
@@ -191,13 +228,22 @@ const initializeWhatsAppClient = async (userId) => {
             }
         }
     });
-    client.on('disconnected', (reason) => {
+
+    client.on('disconnected', async (reason) => {
         console.log(`WhatsApp client disconnected for user ${userId}: ${reason}`);
         whatsappConnectionState[userId] = {
             status: 'disconnected',
             selectedGroup: null,
             groups: []
         };
+
+        // עדכן את פרטי המשתמש בבסיס הנתונים
+        await User.findByIdAndUpdate(userId, {
+            'whatsappConfig.connected': false,
+            'whatsappConfig.selectedGroup': null,
+            'whatsappConfig.selectedGroupName': null
+        });
+
         io.to(userId).emit('whatsapp_status', { status: 'disconnected', reason });
 
         // נקה את הלקוח
@@ -289,6 +335,13 @@ app.post('/api/whatsapp/select-group', async (req, res) => {
         // קבל פרטי קבוצה
         try {
             const chat = await whatsappClients[userId].getChatById(groupId);
+
+            // שמור בבסיס הנתונים
+            await User.findByIdAndUpdate(userId, {
+                'whatsappConfig.selectedGroup': groupId,
+                'whatsappConfig.selectedGroupName': chat.name
+            });
+
             res.json({
                 success: true,
                 message: 'קבוצה נבחרה בהצלחה',
@@ -310,18 +363,84 @@ app.post('/api/whatsapp/select-group', async (req, res) => {
 });
 
 // קבלת סטטוס חיבור
-app.get('/api/whatsapp/status/:userId', (req, res) => {
+app.get('/api/whatsapp/status/:userId', async (req, res) => {
     const { userId } = req.params;
 
     if (!userId) {
         return res.status(400).json({ success: false, message: 'מזהה משתמש נדרש' });
     }
 
-    res.json({
-        success: true,
-        status: whatsappConnectionState[userId]?.status || 'disconnected',
-        selectedGroup: whatsappConnectionState[userId]?.selectedGroup || null
-    });
+    // קבל נתונים מהמשתמש בבסיס הנתונים
+    try {
+        const user = await User.findById(userId);
+
+        // אם המשתמש היה מחובר קודם אבל הסטטוס הנוכחי לא מראה זאת
+        if (user.whatsappConfig.connected &&
+            (!whatsappConnectionState[userId] || whatsappConnectionState[userId].status !== 'connected')) {
+
+            // נסה לאתחל מחדש את החיבור
+            if (!whatsappClients[userId]) {
+                console.log(`Reinitializing WhatsApp client for user ${userId}`);
+                await initializeWhatsAppClient(userId);
+            }
+        }
+
+        res.json({
+            success: true,
+            status: whatsappConnectionState[userId]?.status ||
+                (user.whatsappConfig.connected ? 'initializing' : 'disconnected'),
+            selectedGroup: whatsappConnectionState[userId]?.selectedGroup ||
+                user.whatsappConfig.selectedGroup,
+            listeningEnabled: whatsappConnectionState[userId]?.listeningEnabled ||
+                user.whatsappConfig.listeningEnabled
+        });
+    } catch (err) {
+        console.error('Error getting WhatsApp status:', err);
+        res.json({
+            success: true,
+            status: whatsappConnectionState[userId]?.status || 'disconnected',
+            selectedGroup: whatsappConnectionState[userId]?.selectedGroup || null,
+            listeningEnabled: whatsappConnectionState[userId]?.listeningEnabled || true
+        });
+    }
+});
+
+// API לשליטה במצב האזנה
+app.post('/api/whatsapp/toggle-listening', async (req, res) => {
+    try {
+        const { userId, enabled } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ success: false, message: 'מזהה משתמש נדרש' });
+        }
+
+        if (whatsappConnectionState[userId]) {
+            // עדכון מצב האזנה
+            whatsappConnectionState[userId].listeningEnabled = enabled;
+
+            // שמור בבסיס הנתונים
+            await User.findByIdAndUpdate(userId, {
+                'whatsappConfig.listeningEnabled': enabled
+            });
+
+            // הודע ללקוח על שינוי המצב
+            io.to(userId).emit('whatsapp_listening_status', {
+                enabled: enabled,
+                message: enabled ? 'האזנה לקבוצת WhatsApp מופעלת' : 'האזנה לקבוצת WhatsApp מושבתת'
+            });
+
+            res.json({
+                success: true,
+                enabled: enabled,
+                message: enabled ? 'האזנה לקבוצת WhatsApp הופעלה' : 'האזנה לקבוצת WhatsApp הושבתה'
+            });
+        } else {
+            res.status(400).json({ success: false, message: 'חיבור WhatsApp לא נמצא' });
+        }
+    } catch (err) {
+        console.error('Error toggling listening status:', err);
+        res.status(500).json({ success: false, message: 'שגיאה בשינוי מצב האזנה', error: err.message });
+    }
 });
 
 // קבלת רשימת קבוצות
@@ -388,37 +507,7 @@ app.post('/api/whatsapp/test-group', async (req, res) => {
         res.status(500).json({ success: false, message: 'שגיאה בשליחת הודעת בדיקה', error: err.message });
     }
 });
-app.post('/api/whatsapp/toggle-listening', async (req, res) => {
-    try {
-        const { userId, enabled } = req.body;
 
-        if (!userId) {
-            return res.status(400).json({ success: false, message: 'מזהה משתמש נדרש' });
-        }
-
-        if (whatsappConnectionState[userId]) {
-            // עדכון מצב האזנה
-            whatsappConnectionState[userId].listeningEnabled = enabled;
-
-            // הודע ללקוח על שינוי המצב
-            io.to(userId).emit('whatsapp_listening_status', {
-                enabled: enabled,
-                message: enabled ? 'האזנה לקבוצת WhatsApp מופעלת' : 'האזנה לקבוצת WhatsApp מושבתת'
-            });
-
-            res.json({
-                success: true,
-                enabled: enabled,
-                message: enabled ? 'האזנה לקבוצת WhatsApp הופעלה' : 'האזנה לקבוצת WhatsApp הושבתה'
-            });
-        } else {
-            res.status(400).json({ success: false, message: 'חיבור WhatsApp לא נמצא' });
-        }
-    } catch (err) {
-        console.error('Error toggling listening status:', err);
-        res.status(500).json({ success: false, message: 'שגיאה בשינוי מצב האזנה', error: err.message });
-    }
-});
 app.use('/api/users', require('./routes/users'));
 app.use('/api/groceries', require('./routes/groceries'));
 
