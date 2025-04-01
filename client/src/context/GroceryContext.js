@@ -68,11 +68,6 @@ export const GroceryProvider = ({ children }) => {
         }
     };
 
-    const mockWhatsAppData = () => {
-        const mockItems = ["חלב", "לחם", "ביצים", "גבינה צהובה", "עגבניות", "מלפפונים"];
-        return Promise.all(mockItems.map(text => addGroceryItem(text)));
-    };
-
     return (
         <GroceryContext.Provider value={{
             groceryItems,
@@ -81,7 +76,6 @@ export const GroceryProvider = ({ children }) => {
             addGroceryItem,
             toggleItemCompletion,
             deleteItem,
-            mockWhatsAppData
         }}>
             {children}
         </GroceryContext.Provider>

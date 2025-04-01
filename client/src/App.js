@@ -3,7 +3,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import { UserProvider, UserContext } from './context/UserContext';
 import { GroceryProvider } from './context/GroceryContext';
 import Navbar from './components/Navbar';
-import GroceryListContent from "./pages/GroceryListContent ";
+import GroceryListContent from "./components/grocery/GroceryListContent ";
 import LoginRegisterForm from "./pages/LoginRegisterForm";
 
 const MainContent = () => {

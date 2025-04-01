@@ -59,9 +59,23 @@ const initializeExistingWhatsAppConnections = async () => {
     }
 };
 
-// פונקציה ליצירת ושמירת פריט מכולת חדש
+// פונקציה ליצירת ושמירת פריט מכולת חדש (עם בדיקת כפילויות)
 const createAndSaveGroceryItem = async (userId, text) => {
     try {
+        // בדיקה אם פריט כבר קיים עבור המשתמש הזה וטרם הושלם
+        const existingItem = await GroceryItem.findOne({
+            user: userId,
+            text: { $regex: new RegExp(`^${text}$`, 'i') }, // חיפוש לא רגיש לאותיות גדולות/קטנות
+            completed: false // רק פריטים שעדיין לא הושלמו
+        });
+
+        // אם הפריט כבר קיים, החזר אותו בלי ליצור חדש
+        if (existingItem) {
+            console.log(`Item "${text}" already exists for user ${userId}, skipping duplicate`);
+            return null;
+        }
+
+        // אם הפריט לא קיים, צור אותו
         const item = new GroceryItem({
             user: userId,
             text: text
@@ -75,7 +89,7 @@ const createAndSaveGroceryItem = async (userId, text) => {
     }
 };
 
-// פונקציה חדשה לפירוק טקסט להודעות נפרדות
+// פונקציה לפירוק טקסט להודעות נפרדות
 const processMessageText = async (userId, messageText) => {
     // בדוק אם ההודעה מכילה ירידות שורה
     if (messageText.includes('\n')) {
@@ -87,7 +101,7 @@ const processMessageText = async (userId, messageText) => {
             const trimmedItem = item.trim();
             if (trimmedItem) {  // אם לא ריק
                 const newItem = await createAndSaveGroceryItem(userId, trimmedItem);
-                if (newItem) {
+                if (newItem) {  // רק אם הפריט חדש והתווסף בהצלחה
                     results.push(newItem);
                 }
             }
@@ -179,7 +193,7 @@ const initializeWhatsAppClient = async (userId) => {
         if (whatsappConnectionState[userId]?.selectedGroup === msg.from) {
             const items = await processMessageText(userId, msg.body);
             if (items.length > 0) {
-                console.log(`${items.length} grocery items created from WhatsApp message`);
+                console.log(`${items.length} new grocery items created from WhatsApp message`);
                 items.forEach(item => {
                     console.log('New grocery item created:', item);
                 });
@@ -188,7 +202,17 @@ const initializeWhatsAppClient = async (userId) => {
                     success: true,
                     messageText: msg.body,
                     items: items,
-                    itemCount: items.length
+                    itemCount: items.length,
+                    duplicatesFound: msg.body.split('\n').filter(line => line.trim()).length - items.length
+                });
+            } else {
+                // אם לא נוספו פריטים חדשים כי כולם כבר קיימים
+                io.to(userId).emit('whatsapp_message_processed', {
+                    success: true,
+                    messageText: msg.body,
+                    items: [],
+                    itemCount: 0,
+                    duplicatesFound: msg.body.split('\n').filter(line => line.trim()).length
                 });
             }
         }
