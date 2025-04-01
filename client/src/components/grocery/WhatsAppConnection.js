@@ -1,4 +1,3 @@
-// components/grocery/WhatsAppConnection.jsx
 import React from 'react';
 import { Smartphone, Send, RefreshCw, Plus } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';

@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import { io } from "socket.io-client";
+import {apiService} from "../services/apiServices";
+import {API_BASE_URL} from "../services/config";
+
+// יצירת שירות ייעודי ל-WhatsApp
+const whatsappService = {
+    getStatus: (userId) => apiService.get(`/api/whatsapp/status/${userId}`),
+    connect: (userId) => apiService.post('/api/whatsapp/connect', { userId }),
+    getGroups: (userId) => apiService.get(`/api/whatsapp/groups/${userId}`),
+    selectGroup: (userId, groupId) => apiService.post('/api/whatsapp/select-group', { userId, groupId }),
+    testGroup: (userId) => apiService.post('/api/whatsapp/test-group', { userId }),
+    toggleListening: (userId, enabled) => apiService.post('/api/whatsapp/toggle-listening', { userId, enabled })
+};
 
 export const useWhatsAppConnection = (currentUser, fetchGroceryItems, onItemsUpdate) => {
     const [socket, setSocket] = useState(null);
@@ -16,7 +27,7 @@ export const useWhatsAppConnection = (currentUser, fetchGroceryItems, onItemsUpd
 
     // אתחול Socket.IO וחיבור
     useEffect(() => {
-        const newSocket = io('http://localhost:5000');
+        const newSocket = io(API_BASE_URL);
         setSocket(newSocket);
 
         return () => {
@@ -32,15 +43,21 @@ export const useWhatsAppConnection = (currentUser, fetchGroceryItems, onItemsUpd
 
         const checkWhatsAppStatus = async () => {
             try {
-                const res = await axios.get(`http://localhost:5000/api/whatsapp/status/${currentUser._id}`);
-                if (res.data.success) {
-                    setWhatsappStatus(res.data.status);
-                    if (res.data.selectedGroup) {
-                        setSelectedGroup(res.data.selectedGroup);
-                        getGroupDetails(res.data.selectedGroup);
+                const response = await whatsappService.getStatus(currentUser._id);
+
+                if (response.error) {
+                    console.error('Error checking WhatsApp status:', response.error);
+                    return;
+                }
+
+                if (response.data.success) {
+                    setWhatsappStatus(response.data.status);
+                    if (response.data.selectedGroup) {
+                        setSelectedGroup(response.data.selectedGroup);
+                        getGroupDetails(response.data.selectedGroup);
                     }
-                    if (res.data.listeningEnabled !== undefined) {
-                        setListeningEnabled(res.data.listeningEnabled);
+                    if (response.data.listeningEnabled !== undefined) {
+                        setListeningEnabled(response.data.listeningEnabled);
                     }
                 }
             } catch (err) {
@@ -133,10 +150,22 @@ export const useWhatsAppConnection = (currentUser, fetchGroceryItems, onItemsUpd
             setStatusMessage('מתחיל חיבור ל-WhatsApp...');
             setProcessing(true);
 
-            await axios.post('http://localhost:5000/api/whatsapp/connect', { userId: currentUser._id });
+            const response = await whatsappService.connect(currentUser._id);
+
+            if (response.error) {
+                if (typeof response.error === 'string') {
+                    setError('שגיאה: ' + response.error);
+                } else if (response.error instanceof Error) {
+                    setError('שגיאה: ' + response.error.message);
+                } else {
+                    setError('אירעה שגיאה לא ידועה');
+                }
+                return;
+            }
+
             setWhatsappStatus('initializing');
         } catch (err) {
-            setError('שגיאה בחיבור ל-WhatsApp: ' + (err.response?.data?.message || err.message));
+            setError('שגיאה בחיבור ל-WhatsApp: ' + err.message);
         } finally {
             setProcessing(false);
         }
@@ -148,13 +177,25 @@ export const useWhatsAppConnection = (currentUser, fetchGroceryItems, onItemsUpd
             setStatusMessage('מרענן רשימת קבוצות...');
             setProcessing(true);
 
-            const res = await axios.get(`http://localhost:5000/api/whatsapp/groups/${currentUser._id}`);
-            if (res.data.success) {
-                setGroups(res.data.groups);
-                setStatusMessage(`נטענו ${res.data.groups.length} קבוצות`);
+            const response = await whatsappService.getGroups(currentUser._id);
+
+            if (response.error) {
+                if (typeof response.error === 'string') {
+                    setError('שגיאה: ' + response.error);
+                } else if (response.error instanceof Error) {
+                    setError('שגיאה: ' + response.error.message);
+                } else {
+                    setError('אירעה שגיאה לא ידועה');
+                }
+                return;
+            }
+
+            if (response.data.success) {
+                setGroups(response.data.groups);
+                setStatusMessage(`נטענו ${response.data.groups.length} קבוצות`);
             }
         } catch (err) {
-            setError('שגיאה בטעינת קבוצות: ' + (err.response?.data?.message || err.message));
+            setError('שגיאה בטעינת קבוצות: ' + err.message);
         } finally {
             setProcessing(false);
         }
@@ -178,22 +219,30 @@ export const useWhatsAppConnection = (currentUser, fetchGroceryItems, onItemsUpd
             setStatusMessage('מגדיר קבוצה נבחרת...');
             setProcessing(true);
 
-            const res = await axios.post('http://localhost:5000/api/whatsapp/select-group', {
-                userId: currentUser._id,
-                groupId
-            });
+            const response = await whatsappService.selectGroup(currentUser._id, groupId);
 
-            if (res.data.success) {
+            if (response.error) {
+                if (typeof response.error === 'string') {
+                    setError('שגיאה: ' + response.error);
+                } else if (response.error instanceof Error) {
+                    setError('שגיאה: ' + response.error.message);
+                } else {
+                    setError('אירעה שגיאה לא ידועה');
+                }
+                return;
+            }
+
+            if (response.data.success) {
                 setSelectedGroup(groupId);
                 setSelectedGroupDetails({
-                    name: res.data.groupName,
-                    participantsCount: res.data.participantsCount,
+                    name: response.data.groupName,
+                    participantsCount: response.data.participantsCount,
                     id: groupId
                 });
-                setStatusMessage(`קבוצה "${res.data.groupName}" נבחרה בהצלחה. הודעות יתווספו לרשימה.`);
+                setStatusMessage(`קבוצה "${response.data.groupName}" נבחרה בהצלחה. הודעות יתווספו לרשימה.`);
             }
         } catch (err) {
-            setError('שגיאה בבחירת קבוצה: ' + (err.response?.data?.message || err.message));
+            setError('שגיאה בבחירת קבוצה: ' + err.message);
         } finally {
             setProcessing(false);
         }
@@ -205,15 +254,24 @@ export const useWhatsAppConnection = (currentUser, fetchGroceryItems, onItemsUpd
             setStatusMessage('שולח הודעת בדיקה לקבוצה...');
             setProcessing(true);
 
-            const res = await axios.post('http://localhost:5000/api/whatsapp/test-group', {
-                userId: currentUser._id
-            });
+            const response = await whatsappService.testGroup(currentUser._id);
 
-            if (res.data.success) {
+            if (response.error) {
+                if (typeof response.error === 'string') {
+                    setError('שגיאה: ' + response.error);
+                } else if (response.error instanceof Error) {
+                    setError('שגיאה: ' + response.error.message);
+                } else {
+                    setError('אירעה שגיאה לא ידועה');
+                }
+                return;
+            }
+
+            if (response.data.success) {
                 setStatusMessage('הודעת בדיקה נשלחה בהצלחה! בדוק את הקבוצה בטלפון.');
             }
         } catch (err) {
-            setError('שגיאה בשליחת הודעת בדיקה: ' + (err.response?.data?.message || err.message));
+            setError('שגיאה בשליחת הודעת בדיקה: ' + err.message);
         } finally {
             setProcessing(false);
         }
@@ -224,17 +282,25 @@ export const useWhatsAppConnection = (currentUser, fetchGroceryItems, onItemsUpd
             setError('');
             setProcessing(true);
 
-            const res = await axios.post('http://localhost:5000/api/whatsapp/toggle-listening', {
-                userId: currentUser._id,
-                enabled: !listeningEnabled
-            });
+            const response = await whatsappService.toggleListening(currentUser._id, !listeningEnabled);
 
-            if (res.data.success) {
-                setListeningEnabled(res.data.enabled);
-                setStatusMessage(res.data.message);
+            if (response.error) {
+                if (typeof response.error === 'string') {
+                    setError('שגיאה: ' + response.error);
+                } else if (response.error instanceof Error) {
+                    setError('שגיאה: ' + response.error.message);
+                } else {
+                    setError('אירעה שגיאה לא ידועה');
+                }
+                return;
+            }
+
+            if (response.data.success) {
+                setListeningEnabled(response.data.enabled);
+                setStatusMessage(response.data.message);
             }
         } catch (err) {
-            setError('שגיאה בשינוי מצב האזנה: ' + (err.response?.data?.message || err.message));
+            setError('שגיאה בשינוי מצב האזנה: ' + err.message);
         } finally {
             setProcessing(false);
         }

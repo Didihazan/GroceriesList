@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import {apiService} from "../components/services/apiServices";
 
 export const UserContext = createContext();
 
@@ -22,9 +22,15 @@ export const UserProvider = ({ children }) => {
 
     const loginUser = async (phone) => {
         try {
-            const res = await axios.get(`http://localhost:5000/api/users/${phone}`);
-            setCurrentUser(res.data);
-            localStorage.setItem('currentUser', JSON.stringify(res.data));
+            const response = await apiService.get(`/api/users/${phone}`);
+
+            if (response.error) {
+                console.error('שגיאת התחברות:', response.error);
+                return false;
+            }
+
+            setCurrentUser(response.data);
+            localStorage.setItem('currentUser', JSON.stringify(response.data));
             return true;
         } catch (err) {
             console.error('שגיאת התחברות:', err);
@@ -34,9 +40,15 @@ export const UserProvider = ({ children }) => {
 
     const registerUser = async (userData) => {
         try {
-            const res = await axios.post('http://localhost:5000/api/users', userData);
-            setCurrentUser(res.data);
-            localStorage.setItem('currentUser', JSON.stringify(res.data));
+            const response = await apiService.post('/api/users', userData);
+
+            if (response.error) {
+                console.error('שגיאת הרשמה:', response.error);
+                return false;
+            }
+
+            setCurrentUser(response.data);
+            localStorage.setItem('currentUser', JSON.stringify(response.data));
             return true;
         } catch (err) {
             console.error('שגיאת הרשמה:', err);

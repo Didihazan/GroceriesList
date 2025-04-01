@@ -1,6 +1,14 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import axios from 'axios';
 import { UserContext } from './UserContext';
+import {apiService} from "../components/services/apiServices";
+
+// יצירת שירות ייעודי לפריטי קניות
+const groceryService = {
+    getItems: (userId) => apiService.get(`/api/groceries/user/${userId}`),
+    addItem: (userId, text) => apiService.post('/api/groceries', { userId, text }),
+    toggleCompletion: (itemId) => apiService.patch(`/api/groceries/${itemId}`),
+    deleteItem: (itemId) => apiService.delete(`/api/groceries/${itemId}`)
+};
 
 export const GroceryContext = createContext();
 
@@ -21,8 +29,13 @@ export const GroceryProvider = ({ children }) => {
     const fetchGroceryItems = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`http://localhost:5000/api/groceries/user/${currentUser._id}`);
-            setGroceryItems(res.data);
+            const response = await groceryService.getItems(currentUser._id);
+
+            if (response.error) {
+                throw new Error(response.error);
+            }
+
+            setGroceryItems(response.data);
         } catch (err) {
             console.error('Error fetching grocery items:', err);
         }
@@ -31,11 +44,13 @@ export const GroceryProvider = ({ children }) => {
 
     const addGroceryItem = async (text) => {
         try {
-            const res = await axios.post('http://localhost:5000/api/groceries', {
-                userId: currentUser._id,
-                text
-            });
-            setGroceryItems([res.data, ...groceryItems]);
+            const response = await groceryService.addItem(currentUser._id, text);
+
+            if (response.error) {
+                throw new Error(response.error);
+            }
+
+            setGroceryItems([response.data, ...groceryItems]);
             return true;
         } catch (err) {
             console.error('Error adding grocery item:', err);
@@ -45,21 +60,32 @@ export const GroceryProvider = ({ children }) => {
 
     const toggleItemCompletion = async (id) => {
         try {
-            const res = await axios.patch(`http://localhost:5000/api/groceries/${id}`);
+            const response = await groceryService.toggleCompletion(id);
+
+            if (response.error) {
+                throw new Error(response.error);
+            }
+
             setGroceryItems(
                 groceryItems.map(item =>
-                    item._id === id ? { ...item, completed: res.data.completed } : item
+                    item._id === id ? { ...item, completed: response.data.completed } : item
                 )
             );
             return true;
         } catch (err) {
+            console.error('שגיאה בעדכון סטטוס פריט:', err);
             return false;
         }
     };
 
     const deleteItem = async (id) => {
         try {
-            await axios.delete(`http://localhost:5000/api/groceries/${id}`);
+            const response = await groceryService.deleteItem(id);
+
+            if (response.error) {
+                throw new Error(response.error);
+            }
+
             setGroceryItems(prevItems => prevItems.filter(item => item._id !== id));
             return true;
         } catch (err) {
