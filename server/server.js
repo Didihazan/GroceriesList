@@ -10,9 +10,13 @@ const GroceryItem = require('./models/GroceryItem');
 
 dotenv.config();
 
+const CLIENT_URL = process.env.NODE_ENV === 'development'
+    ? 'http://localhost:3000'
+    : 'https://grocerieslist-5qci.onrender.com';
+
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: 'http://localhost:3000' } });
+const io = new Server(server, { cors: { origin: CLIENT_URL } });
 
 app.use(cors());
 app.use(express.json());
